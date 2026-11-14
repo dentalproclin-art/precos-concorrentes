@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Preços Proclin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Mostra no VendAi os preços dos concorrentes de cada produto (Dental Proclin). Não altera nada no VendAi.",
   "permissions": ["storage"],
   "host_permissions": ["https://raw.githubusercontent.com/*", "https://submit.jotform.com/*"],

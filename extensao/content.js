@@ -26,7 +26,7 @@
     if (p && p <= m[1] + 0.005) { el.textContent = '🏷️ somos os mais baratos (menor: ' + brl(m[1]) + ' ' + m[0] + ')'; el.classList.add('pp-verde'); }
     else { el.textContent = '🏷️ menor: ' + brl(m[1]) + ' (' + m[0] + ')' + (p ? ' · estamos ' + Math.round((p / m[1] - 1) * 100) + '% acima' : ''); el.classList.add('pp-vermelho'); }
     el.title = 'Clique para ver todos os concorrentes';
-    el.addEventListener('click', e => { e.stopPropagation(); quadro(c, nosso); });
+    el.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); quadro(c, nosso, true); });
     return el;
   }
 
@@ -39,19 +39,44 @@
       const c = tds[i].innerText.match(CODIGO)[1]; if (!D.p[c]) return;
       tr.dataset.ppFeito = '1';
       const nosso = tds.map(td => num(td.innerText)).filter(v => v).pop() || null;
-      const alvo = tds[i + 1] || tds[i];
+      // vai na célula do nome do produto (a vizinha com mais texto), não numa coluna estreita
+      const viz = [tds[i - 1], tds[i + 1]].filter(td => td && !td.querySelector('input,select,button'));
+      const alvo = viz.sort((a, b) => b.innerText.trim().length - a.innerText.trim().length)[0] || tds[i];
       const el = etiqueta(c, nosso); if (el) alvo.appendChild(el);
       tr.addEventListener('click', () => { ultimoCodigo = c; }, true);
     });
   }
 
+  // Cartões de "Buscar Produtos" no pedido/orçamento ("Cód. Prod.: 001.136001.01")
+  const CARTAO = /C[óo]d\.\s*Prod\.?:?\s*(?:001\.)?(\d{6}(?:-\d{1,2})?)(?:\.\d{2})?\b/;
+  function etiquetarCartoes() {
+    const conta = e => (e.textContent.match(/C[óo]d\.\s*Prod/g) || []).length;
+    document.querySelectorAll('span, div, p').forEach(s => {
+      if (s.childElementCount > 2 || !s.textContent.includes('Prod')) return;
+      const k = s.textContent.match(CARTAO); if (!k || !D.p[k[1]]) return;
+      if (s.parentElement && s.parentElement.childElementCount <= 2 && CARTAO.test(s.parentElement.textContent) && conta(s.parentElement) === 1 && s.parentElement.textContent.length < 160) return; // usa o pai
+      // sobe até o cartão inteiro (o maior bloco que só tem este produto), sem pegar a busca ou a tabela
+      let card = s;
+      while (card.parentElement && card.parentElement !== document.body && conta(card.parentElement) === 1 &&
+             !card.parentElement.querySelector('input, ng-select, table')) card = card.parentElement;
+      if (card === s) return;
+      if (card.dataset.ppC === k[1]) return;          // já etiquetado com este produto
+      card.querySelectorAll('.pp-tag').forEach(t => t.remove());  // cartão reaproveitado para outro produto
+      card.dataset.ppC = k[1];
+      const pr = card.querySelector('.new-price') || card.querySelector('.price');
+      const el = etiqueta(k[1], pr ? num(pr.textContent) : null); if (!el) return;
+      s.after(el);                                    // logo abaixo da linha "Cód. Prod."
+      card.addEventListener('click', () => { ultimoCodigo = k[1]; }, true);
+    });
+  }
+
   // Quadro "Concorrentes"
-  function quadro(c, nosso) {
+  function quadro(c, nosso, manual) {
     const x = D.p[c]; if (!x) return;
     let box = document.getElementById('pp-box');
-    if (box && box.dataset.c === c) return;
+    if (box && box.dataset.c === c) { if (manual) box.dataset.manual = '1'; return; }
     if (!box) { box = document.createElement('div'); box.id = 'pp-box'; document.body.appendChild(box); }
-    box.dataset.c = c;
+    box.dataset.c = c; box.dataset.manual = manual ? '1' : '';
     const p = nosso || x.pn, m = menor(x);
     const linhas = (x.c || []).map((k, j) => `<tr class="${k === m ? 'pp-melhor' : ''}${k[4] ? ' pp-rev' : ''}">
         <td>${esc(k[0])}${k[4] ? ' <span class="pp-aviso">⚠ link em revisão</span>' : ''}</td><td class="pp-r">${brl(k[1])}</td>
@@ -107,10 +132,10 @@
       c = achado || ultimoCodigo;
     }
     if (c && D.p[c]) quadro(c, null);
-    else if (box && !det && !idCad) box.remove();
+    else if (box && !det && !idCad && !box.dataset.manual) box.remove();  // aberto pela etiqueta: só fecha no ×
   }
 
-  function varrer() { if (!D) return; etiquetarLinhas(); quadroAutomatico(); }
+  function varrer() { if (!D) return; etiquetarLinhas(); etiquetarCartoes(); quadroAutomatico(); }
   let t = null; new MutationObserver(() => { clearTimeout(t); t = setTimeout(varrer, 600); }).observe(document.body, { childList: true, subtree: true });
   carregar(false);
 })();
